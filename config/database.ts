@@ -1,60 +1,106 @@
 import path from 'path';
+import { env } from '../src/utils/env';
 
-export default ({ env }) => {
-  const client = env('DATABASE_CLIENT', 'sqlite');
+type SupportedClient = 'postgres' | 'mysql' | 'sqlite';
 
-  const connections = {
-    mysql: {
+const DEFAULT_POOL = { min: 2, max: 10 };
+const SQLITE_FILENAME = (filename: string) => path.join(process.cwd(), filename);
+
+const normalizeClient = (protocol: string): SupportedClient => {
+  switch (protocol.replace(':', '')) {
+    case 'postgres':
+    case 'postgresql':
+      return 'postgres';
+    case 'mysql':
+    case 'mysql2':
+    case 'mariadb':
+      return 'mysql';
+    case 'sqlite':
+      return 'sqlite';
+    default:
+      throw new Error(`Unsupported database protocol "${protocol}"`);
+  }
+};
+
+const buildSslConfig = () =>
+  env.databaseSsl
+    ? {
+        rejectUnauthorized: env.databaseSslRejectUnauthorized,
+      }
+    : undefined;
+
+const connectionFromUrl = (databaseUrl: string) => {
+  const url = new URL(databaseUrl);
+  const client = normalizeClient(url.protocol);
+
+  if (client === 'sqlite') {
+    const filename = url.pathname?.replace(/^\//, '') || env.databaseFilename;
+    return {
+      client,
       connection: {
-        host: env('DATABASE_HOST', 'localhost'),
-        port: env.int('DATABASE_PORT', 3306),
-        database: env('DATABASE_NAME', 'strapi'),
-        user: env('DATABASE_USERNAME', 'strapi'),
-        password: env('DATABASE_PASSWORD', 'strapi'),
-        ssl: env.bool('DATABASE_SSL', false) && {
-          key: env('DATABASE_SSL_KEY', undefined),
-          cert: env('DATABASE_SSL_CERT', undefined),
-          ca: env('DATABASE_SSL_CA', undefined),
-          capath: env('DATABASE_SSL_CAPATH', undefined),
-          cipher: env('DATABASE_SSL_CIPHER', undefined),
-          rejectUnauthorized: env.bool('DATABASE_SSL_REJECT_UNAUTHORIZED', true),
-        },
-      },
-      pool: { min: env.int('DATABASE_POOL_MIN', 2), max: env.int('DATABASE_POOL_MAX', 10) },
-    },
-    postgres: {
-      connection: {
-        connectionString: env('DATABASE_URL'),
-        host: env('DATABASE_HOST', 'localhost'),
-        port: env.int('DATABASE_PORT', 5432),
-        database: env('DATABASE_NAME', 'strapi'),
-        user: env('DATABASE_USERNAME', 'strapi'),
-        password: env('DATABASE_PASSWORD', 'strapi'),
-        ssl: env.bool('DATABASE_SSL', false) && {
-          key: env('DATABASE_SSL_KEY', undefined),
-          cert: env('DATABASE_SSL_CERT', undefined),
-          ca: env('DATABASE_SSL_CA', undefined),
-          capath: env('DATABASE_SSL_CAPATH', undefined),
-          cipher: env('DATABASE_SSL_CIPHER', undefined),
-          rejectUnauthorized: env.bool('DATABASE_SSL_REJECT_UNAUTHORIZED', true),
-        },
-        schema: env('DATABASE_SCHEMA', 'public'),
-      },
-      pool: { min: env.int('DATABASE_POOL_MIN', 2), max: env.int('DATABASE_POOL_MAX', 10) },
-    },
-    sqlite: {
-      connection: {
-        filename: path.join(__dirname, '..', '..', env('DATABASE_FILENAME', '.tmp/data.db')),
+        filename: SQLITE_FILENAME(filename),
       },
       useNullAsDefault: true,
+    };
+  }
+
+  const dbName = url.pathname.replace(/^\//, '') || undefined;
+
+  return {
+    client,
+    connection: {
+      connectionString: databaseUrl,
+      host: url.hostname,
+      port: url.port ? Number(url.port) : client === 'postgres' ? 5432 : 3306,
+      database: dbName,
+      user: decodeURIComponent(url.username || ''),
+      password: decodeURIComponent(url.password || ''),
+      ssl: buildSslConfig(),
     },
+    pool: DEFAULT_POOL,
   };
+};
+
+const connectionFromDiscreteValues = () => {
+  const client: SupportedClient = env.databaseClient ?? 'sqlite';
+
+  if (client === 'sqlite') {
+    return {
+      client,
+      connection: {
+        filename: SQLITE_FILENAME(env.databaseFilename),
+      },
+      useNullAsDefault: true,
+    };
+  }
+
+  if (!env.databaseHost || !env.databaseName || !env.databaseUsername) {
+    throw new Error(
+      'DATABASE_HOST, DATABASE_NAME, and DATABASE_USERNAME are required when DATABASE_URL is not provided.',
+    );
+  }
+
+  return {
+    client,
+    connection: {
+      host: env.databaseHost,
+      port: env.databasePort ?? (client === 'postgres' ? 5432 : 3306),
+      database: env.databaseName,
+      user: env.databaseUsername,
+      password: env.databasePassword,
+      ssl: buildSslConfig(),
+    },
+    pool: DEFAULT_POOL,
+  };
+};
+
+export default () => {
+  const config = env.databaseUrl ? connectionFromUrl(env.databaseUrl) : connectionFromDiscreteValues();
 
   return {
     connection: {
-      client,
-      ...connections[client],
-      acquireConnectionTimeout: env.int('DATABASE_CONNECTION_TIMEOUT', 60000),
+      ...config,
+      acquireConnectionTimeout: 60000,
     },
   };
 };

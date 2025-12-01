@@ -1,7 +1,9 @@
-export default ({ env }) => ({
-  host: env('HOST', '0.0.0.0'),
-  port: env.int('PORT', 1337),
+import { env } from '../src/utils/env';
+
+export default () => ({
+  host: env.host,
+  port: env.port,
   app: {
-    keys: env.array('APP_KEYS'),
+    keys: env.appKeys,
   },
 });

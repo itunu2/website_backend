@@ -1,4 +1,9 @@
-export default ({ env }) => ({
+type EnvFn = {
+  <T = string>(key: string, defaultValue?: T): T;
+  bool(key: string, defaultValue?: boolean): boolean;
+};
+
+export default ({ env }: { env: EnvFn }) => ({
   auth: {
     secret: env('ADMIN_JWT_SECRET'),
   },

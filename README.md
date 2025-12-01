@@ -1,61 +1,100 @@
-# 🚀 Getting started with Strapi
+# Itunus Backend (Strapi v5)
 
-Strapi comes with a full featured [Command Line Interface](https://docs.strapi.io/dev-docs/cli) (CLI) which lets you scaffold and manage your project in seconds.
+Production-ready Strapi v5.31 backend powering the Itunus content platform. Phase 1 delivers a robust local setup with strict configuration validation, a complete Blog Post content model, and operational health monitoring.
 
-### `develop`
+## Requirements
 
-Start your Strapi application with autoReload enabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-develop)
+- Node.js 20+
+- npm 9+
+- SQLite (bundled) or any SQL database reachable via `DATABASE_URL`
 
-```
+## Getting Started
+
+```bash
+# install dependencies
+npm install
+
+# start Strapi in watch mode
 npm run develop
-# or
-yarn develop
-```
 
-### `start`
-
-Start your Strapi application with autoReload disabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-start)
-
-```
-npm run start
-# or
-yarn start
-```
-
-### `build`
-
-Build your admin panel. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-build)
-
-```
+# build admin & server for production
 npm run build
-# or
-yarn build
+
+# start the compiled server
+npm start
 ```
 
-## ⚙️ Deployment
+### Helpful Scripts
 
-Strapi gives you many possible deployment options for your project including [Strapi Cloud](https://cloud.strapi.io). Browse the [deployment section of the documentation](https://docs.strapi.io/dev-docs/deployment) to find the best solution for your use case.
+| Script | Purpose |
+| --- | --- |
+| `npm run develop` | Start Strapi with auto-reload |
+| `npm run build` | Compile admin panel & server |
+| `npm start` | Launch production server |
+| `npm run lint` | ESLint with type-aware rules |
+| `npm run format` | Format code with Prettier |
+| `npm run test` | Run Jest test suite |
 
+## Environment Configuration
+
+All secrets live in `.env`. Copy `.env.example`, update the blanks, and keep secrets out of git.
+
+| Variable | Description |
+| --- | --- |
+| `HOST` / `PORT` | Bind address for the HTTP server |
+| `APP_KEYS` | Comma-separated list of Strapi application keys |
+| `API_TOKEN_SALT` | Salt used for API tokens |
+| `ADMIN_JWT_SECRET` | Secret for the admin panel JWT |
+| `TRANSFER_TOKEN_SALT` | Salt for transfer tokens |
+| `JWT_SECRET` | Front-office JWT secret (if used) |
+| `DATABASE_URL` | Optional connection string (`postgres://`, `mysql://`, `sqlite://`) |
+| `DATABASE_CLIENT` + granular fields | Fallback discrete DB configuration |
+| `CORS_ORIGINS` | Optional comma-separated list of allowed origins |
+
+Boot-time validation (powered by Zod) fails fast when required values are missing, ensuring misconfigurations never reach runtime.
+
+## Blog Post API
+
+- Collection type with title, slug, description, rich content, tags, featured image, publish status, and metadata.
+- Public read endpoints:
+	- `GET /api/blog-posts` – paginated feed of published posts only.
+	- `GET /api/blog-posts/slug/:slug` – fetch a single published post by slug.
+	- `GET /api/blog-posts/tag/:tag` – filter published posts by tag.
+- All write operations remain authenticated (handled via Strapi role permissions).
+
+## Health Endpoint
+
+`GET /api/health` returns:
+
+```json
+{
+	"status": "ok",
+	"uptimeSeconds": 1234,
+	"nodeVersion": "v20.11.0",
+	"strapiVersion": "5.31.2",
+	"timestamp": "2025-12-01T00:00:00.000Z",
+	"database": {
+		"status": "up",
+		"latencyMs": 4
+	}
+}
 ```
-yarn strapi deploy
-```
 
-## 📚 Learn more
+Use it for uptime monitoring, load balancer health checks, or synthetic pings.
 
-- [Resource center](https://strapi.io/resource-center) - Strapi resource center.
-- [Strapi documentation](https://docs.strapi.io) - Official Strapi documentation.
-- [Strapi tutorials](https://strapi.io/tutorials) - List of tutorials made by the core team and the community.
-- [Strapi blog](https://strapi.io/blog) - Official Strapi blog containing articles made by the Strapi team and the community.
-- [Changelog](https://strapi.io/changelog) - Find out about the Strapi product updates, new features and general improvements.
+## Testing & Quality Gates
 
-Feel free to check out the [Strapi GitHub repository](https://github.com/strapi/strapi). Your feedback and contributions are welcome!
+- **Unit tests:** `npm run test` executes Jest with ts-jest, currently covering environment validation (extend with services/controllers as they evolve).
+- **Linting:** `npm run lint` runs ESLint (type-aware) with Prettier integration.
+- **Formatting:** `npm run format` enforces consistent code style.
 
-## ✨ Community
+## Observability & Security Defaults
 
-- [Discord](https://discord.strapi.io) - Come chat with the Strapi community including the core team.
-- [Forum](https://forum.strapi.io/) - Place to discuss, ask questions and find answers, show your Strapi project and get feedback or just talk with other Community members.
-- [Awesome Strapi](https://github.com/strapi/awesome-strapi) - A curated list of awesome things related to Strapi.
+- Dynamic CORS middleware allows localhost plus Render/Fly domains (and can be extended via `CORS_ORIGINS`).
+- Security middleware enforces CSP, HSTS, XSS filter, and strict frame-guarding.
+- Structured health response includes database latency plus uptime markers for dashboards.
 
----
+## Next Steps
 
-<sub>🤫 Psst! [Strapi is hiring](https://strapi.io/careers).</sub>
+- Phase 2: provision S3 upload provider, Redis caching, scheduled self-pings, and structured request logging.
+- Phase 3: add deployment manifests (Render/Railway/Fly.io), deeper test coverage, and turnkey documentation.
