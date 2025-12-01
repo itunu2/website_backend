@@ -1,0 +1,21 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: itunus
+      POSTGRES_USER: itunus
+      POSTGRES_PASSWORD: change-me
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U itunus']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  db-data:
+    driver: local

@@ -43,6 +43,17 @@ const rawEnvSchema = z.object({
   DATABASE_SSL_REJECT_UNAUTHORIZED: z.any().optional(),
   DATABASE_FILENAME: z.string().default('.tmp/data.db'),
   CORS_ORIGINS: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  AWS_REGION: z.string().optional(),
+  AWS_BUCKET: z.string().optional(),
+  AWS_ACL: z.string().default('public-read'),
+  AWS_CDN_BASE_URL: z.string().url().optional(),
+  REDIS_URL: z.string().url().optional(),
+  CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  SELF_PING_ENABLED: z.any().optional(),
+  SELF_PING_INTERVAL_MINUTES: z.coerce.number().int().min(1).default(10),
+  PUBLIC_BASE_URL: z.string().url().optional(),
 });
 
 const envSchema = rawEnvSchema.transform((value) => {
@@ -69,6 +80,19 @@ const envSchema = rawEnvSchema.transform((value) => {
     databaseSslRejectUnauthorized: toBoolean(value.DATABASE_SSL_REJECT_UNAUTHORIZED ?? true),
     databaseFilename: value.DATABASE_FILENAME,
     corsOrigins: csvToArray(value.CORS_ORIGINS),
+    aws: {
+      accessKeyId: value.AWS_ACCESS_KEY_ID,
+      secretAccessKey: value.AWS_SECRET_ACCESS_KEY,
+      region: value.AWS_REGION,
+      bucket: value.AWS_BUCKET,
+      acl: value.AWS_ACL,
+      cdnBaseUrl: value.AWS_CDN_BASE_URL,
+    },
+    redisUrl: value.REDIS_URL,
+    cacheTtlSeconds: value.CACHE_TTL_SECONDS,
+    selfPingEnabled: toBoolean(value.SELF_PING_ENABLED),
+    selfPingIntervalMinutes: value.SELF_PING_INTERVAL_MINUTES,
+    publicBaseUrl: value.PUBLIC_BASE_URL,
   } as const;
 });
 

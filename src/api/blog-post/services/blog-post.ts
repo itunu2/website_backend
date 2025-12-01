@@ -1,10 +1,15 @@
 import { factories } from '@strapi/strapi';
+import { cache } from '../../../utils/cache';
+import { env } from '../../../utils/env';
+import { blogPostCacheKeys } from '../utils/cache-helpers';
 
 type BlogPostEntity = {
   slug?: string | null;
   status?: string | null;
   tags?: unknown;
 };
+
+type BlogPost = BlogPostEntity & Record<string, unknown>;
 
 const normalizeTags = (tags: BlogPostEntity['tags']) => {
   if (!Array.isArray(tags)) {
@@ -20,12 +25,25 @@ export default factories.createCoreService('api::blog-post.blog-post', ({ strapi
       throw new Error('A slug is required to fetch a published blog post');
     }
 
+    const cacheKey = blogPostCacheKeys.slug(slug);
+
+    if (cache.isEnabled()) {
+      const cached = await cache.get<BlogPost>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const [post] = await strapi.entityService.findMany('api::blog-post.blog-post', {
       filters: { slug, status: 'published' },
       limit: 1,
       populate: ['featuredImage'],
       publicationState: 'live',
     });
+
+    if (post && cache.isEnabled()) {
+      await cache.set(cacheKey, post, env.cacheTtlSeconds);
+    }
 
     return post ?? null;
   },
@@ -35,6 +53,15 @@ export default factories.createCoreService('api::blog-post.blog-post', ({ strapi
       throw new Error('A tag is required to filter blog posts');
     }
 
+    const cacheKey = blogPostCacheKeys.tag(tag);
+
+    if (cache.isEnabled()) {
+      const cached = await cache.get<BlogPost[]>(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const posts = await strapi.entityService.findMany('api::blog-post.blog-post', {
       filters: { status: 'published' },
       populate: ['featuredImage'],
@@ -42,8 +69,14 @@ export default factories.createCoreService('api::blog-post.blog-post', ({ strapi
       sort: { publishedDate: 'desc' },
     });
 
-    return posts.filter((post: BlogPostEntity) =>
+    const filtered = posts.filter((post: BlogPostEntity) =>
       normalizeTags(post.tags).some((value) => value.toLowerCase() === tag.toLowerCase()),
     );
+
+    if (cache.isEnabled()) {
+      await cache.set(cacheKey, filtered, env.cacheTtlSeconds);
+    }
+
+    return filtered;
   },
 }));

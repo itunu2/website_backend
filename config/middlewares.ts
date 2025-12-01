@@ -35,6 +35,7 @@ const resolveOrigin = (ctx: Context) => {
 };
 
 export default [
+  'global::request-context',
   'strapi::logger',
   'strapi::errors',
   {

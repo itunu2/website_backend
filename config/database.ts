@@ -95,6 +95,11 @@ const connectionFromDiscreteValues = () => {
 };
 
 export default () => {
+  if (!env.databaseUrl && (env.databaseClient ?? 'sqlite') === 'sqlite' && env.nodeEnv !== 'test') {
+    // eslint-disable-next-line no-console
+    console.warn('SQLite is intended for smoke tests only. Configure DATABASE_URL for persistence.');
+  }
+
   const config = env.databaseUrl ? connectionFromUrl(env.databaseUrl) : connectionFromDiscreteValues();
 
   return {

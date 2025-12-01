@@ -1,20 +1,41 @@
-// import type { Core } from '@strapi/strapi';
+import type { Core } from '@strapi/strapi';
+import { shutdownCache } from './utils/cache';
+import { env } from './utils/env';
+
+const setupSelfPing = (strapi: Core.Strapi) => {
+  if (!env.selfPingEnabled) {
+    return;
+  }
+
+  const baseUrl = env.publicBaseUrl ?? `http://${env.host}:${env.port}`;
+  const healthUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
+  const intervalMs = env.selfPingIntervalMinutes * 60 * 1000;
+
+  const tick = async () => {
+    try {
+      await fetch(healthUrl);
+      strapi.log.debug('self_ping.ok', { healthUrl });
+    } catch (error) {
+      strapi.log.warn('self_ping.failed', {
+        healthUrl,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  };
+
+  const timer = setInterval(tick, intervalMs);
+  strapi.server.httpServer?.once('close', () => clearInterval(timer));
+  strapi.log.info('Self-ping scheduler enabled', { healthUrl, intervalMs });
+};
 
 export default {
-  /**
-   * An asynchronous register function that runs before
-   * your application is initialized.
-   *
-   * This gives you an opportunity to extend code.
-   */
-  register(/* { strapi }: { strapi: Core.Strapi } */) {},
+  register({ strapi }: { strapi: Core.Strapi }) {
+    strapi.server.httpServer?.once('close', () => {
+      shutdownCache();
+    });
+  },
 
-  /**
-   * An asynchronous bootstrap function that runs before
-   * your application gets started.
-   *
-   * This gives you an opportunity to set up your data model,
-   * run jobs, or perform some special logic.
-   */
-  bootstrap(/* { strapi }: { strapi: Core.Strapi } */) {},
+  bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    setupSelfPing(strapi);
+  },
 };
