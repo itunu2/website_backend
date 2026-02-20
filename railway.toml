@@ -1,0 +1,24 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install && npm run build"
+
+[deploy]
+startCommand = "npm run start"
+restartPolicyType = "on_failure"
+
+[env]
+NODE_ENV = "production"
+HOST = "0.0.0.0"
+PORT = "3000"
+CACHE_TTL_SECONDS = "300"
+SELF_PING_ENABLED = "false"
+DATABASE_URL = "${{ PostgreSQL.DATABASE_URL }}"
+
+[service]
+name = "strapi-backend"
+path = "."
+healthcheckPath = "/api/health"
+
+[[service.volumeMounts]]
+name = "uploads"
+path = "/app/public/uploads"

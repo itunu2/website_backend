@@ -5,6 +5,6 @@
     "noEmit": true,
     "isolatedModules": false
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "**/*.test.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "**/*.test.ts", "tests/setup-*.ts"],
   "exclude": ["node_modules", "dist", "build"]
 }

@@ -1,6 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import { shutdownCache } from './utils/cache';
 import { env } from './utils/env';
+import { syncBlogPostStatuses } from './api/blog-post/utils/status-sync';
 
 const setupSelfPing = (strapi: Core.Strapi) => {
   if (!env.selfPingEnabled) {
@@ -35,7 +36,8 @@ export default {
     });
   },
 
-  bootstrap({ strapi }: { strapi: Core.Strapi }) {
+  async bootstrap({ strapi }: { strapi: Core.Strapi }) {
     setupSelfPing(strapi);
+    await syncBlogPostStatuses(strapi);
   },
 };

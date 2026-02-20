@@ -3,6 +3,8 @@ import { invalidateBlogPostCache, type BlogPostLike } from '../../utils/cache-he
 
 type BlogPostData = BlogPostLike & {
   title?: string | null;
+  status?: string | null;
+  publishedAt?: string | null;
 };
 
 type BlogPostLifecycleEvent = {
@@ -28,12 +30,26 @@ const ensureSlug = (data?: BlogPostData | null) => {
   }
 };
 
+const syncStatusWithPublicationState = (data?: BlogPostData | null) => {
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'publishedAt')) {
+    data.status = data.publishedAt ? 'published' : 'draft';
+  } else if (!('status' in data) || data.status == null || data.status === '') {
+    data.status = 'draft';
+  }
+};
+
 const lifecycles = {
   async beforeCreate(event: BlogPostLifecycleEvent) {
     ensureSlug(event.params?.data);
+    syncStatusWithPublicationState(event.params?.data);
   },
   async beforeUpdate(event: BlogPostLifecycleEvent) {
     ensureSlug(event.params?.data);
+    syncStatusWithPublicationState(event.params?.data);
   },
   async afterCreate(event: BlogPostLifecycleEvent) {
     await invalidateBlogPostCache(event.result);

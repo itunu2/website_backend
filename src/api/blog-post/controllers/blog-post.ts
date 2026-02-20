@@ -4,13 +4,16 @@ const BLOG_POST_UID = 'api::blog-post.blog-post' as const;
 
 export default factories.createCoreController(BLOG_POST_UID as never, ({ strapi }) => ({
   async find(ctx) {
+    const { filters: incomingFilters = {}, ...rest } = ctx.query ?? {};
+    const safeFilters =
+      typeof incomingFilters === 'object' && incomingFilters !== null ? incomingFilters : {};
+
     ctx.query = {
-      ...ctx.query,
+      ...rest,
       filters: {
-        ...(ctx.query?.filters ?? {}),
+        ...safeFilters,
         status: 'published',
       },
-      publicationState: 'live',
       sort: ctx.query?.sort ?? { publishedDate: 'desc' },
     };
 

@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "start": "strapi start",
     "strapi": "strapi",
+    "pretest": "npm run build",
     "test": "jest --runInBand",
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
@@ -40,12 +41,14 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.48.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "jest": "^30.2.0",
     "prettier": "^3.7.3",
+    "supertest": "^7.1.4",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5"

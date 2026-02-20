@@ -1,0 +1,56 @@
+services:
+  - type: web
+    name: strapi-backend
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_CLIENT
+        value: postgres
+      - key: DATABASE_SSL
+        value: "true"
+      - key: APP_KEYS
+        sync: false
+      - key: API_TOKEN_SALT
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      - key: TRANSFER_TOKEN_SALT
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_BUCKET
+        sync: false
+      - key: AWS_ACL
+        value: public-read
+      - key: AWS_CDN_BASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CACHE_TTL_SECONDS
+        value: 300
+      - key: SELF_PING_ENABLED
+        value: "true"
+      - key: SELF_PING_INTERVAL_MINUTES
+        value: 10
+      - key: PUBLIC_BASE_URL
+        sync: false

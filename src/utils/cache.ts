@@ -23,7 +23,11 @@ const createRedisDriver = (): Driver => {
   redisClient = client;
 
   client.on('error', (error) => {
-    console.error('Redis error', error); // eslint-disable-line no-console
+    // Note: Redis client errors are handled internally
+    // For production monitoring, integrate with your logging service
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Redis error', error); // eslint-disable-line no-console
+    }
   });
 
   return {
@@ -92,6 +96,9 @@ export const shutdownCache = async () => {
   try {
     await redisClient.quit();
   } catch (error) {
-    console.error('Failed to close Redis connection', error); // eslint-disable-line no-console
+    // Graceful shutdown, log only in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Failed to close Redis connection', error); // eslint-disable-line no-console
+    }
   }
 };

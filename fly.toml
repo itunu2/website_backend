@@ -1,0 +1,36 @@
+app = "itunus-strapi"
+primary_region = "iad"
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+[build]
+  builtin = "node"
+
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  CACHE_TTL_SECONDS = "300"
+
+[processes]
+  app = "npm run start"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+
+[[mounts]]
+  source = "strapi_uploads"
+  destination = "/app/public/uploads"

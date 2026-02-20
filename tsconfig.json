@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "module": "CommonJS",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "lib": ["ES2020", "DOM"],
     "target": "ES2019",
     "strict": true,

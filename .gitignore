@@ -129,3 +129,11 @@ dist
 build
 .strapi-updater.json
 .strapi-cloud.json
+
+############################
+# Development/Planning Docs
+############################
+
+BACKEND_PLAN.md
+FRONTEND_HANDOFF.md
+PHASE_STATUS.md

@@ -34,18 +34,22 @@ export default factories.createCoreService('api::blog-post.blog-post', ({ strapi
       }
     }
 
-    const [post] = await strapi.entityService.findMany('api::blog-post.blog-post', {
-      filters: { slug, status: 'published' },
+    const posts = await strapi.db.query('api::blog-post.blog-post').findMany({
+      where: {
+        slug: { $eq: slug },
+        status: { $eq: 'published' },
+      },
       limit: 1,
-      populate: ['featuredImage'],
-      publicationState: 'live',
+      populate: { featuredImage: true },
     });
+
+    const post = Array.isArray(posts) && posts.length > 0 ? posts[0] : null;
 
     if (post && cache.isEnabled()) {
       await cache.set(cacheKey, post, env.cacheTtlSeconds);
     }
 
-    return post ?? null;
+    return post;
   },
 
   async findByTag(tag: string) {
@@ -62,11 +66,10 @@ export default factories.createCoreService('api::blog-post.blog-post', ({ strapi
       }
     }
 
-    const posts = await strapi.entityService.findMany('api::blog-post.blog-post', {
-      filters: { status: 'published' },
-      populate: ['featuredImage'],
-      publicationState: 'live',
-      sort: { publishedDate: 'desc' },
+    const posts = await strapi.db.query('api::blog-post.blog-post').findMany({
+      where: { status: { $eq: 'published' } },
+      populate: { featuredImage: true },
+      orderBy: { publishedDate: 'desc' },
     });
 
     const filtered = posts.filter((post: BlogPostEntity) =>

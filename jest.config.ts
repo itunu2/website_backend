@@ -6,10 +6,10 @@ const config: Config = {
   clearMocks: true,
   collectCoverageFrom: ['src/**/*.{ts,js}', '!src/admin/**', '!src/plugins/**'],
   moduleFileExtensions: ['ts', 'js', 'json'],
-  roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.test.ts'],
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
+  testMatch: ['**/__tests__/**/*.test.ts', '<rootDir>/tests/**/*.test.ts'],
   setupFiles: ['<rootDir>/tests/setup-env.ts'],
-  setupFilesAfterEnv: [],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup-jest.ts'],
   transform: {
     '^.+\\.(ts|tsx)$': [
       'ts-jest',
