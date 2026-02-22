@@ -1,4 +1,3 @@
-import path from 'path';
 import { env } from '../src/utils/env';
 
 const MAX_FILE_SIZE_MB = 10;
@@ -13,9 +12,9 @@ export default () => ({
 			sizeLimit: MAX_FILE_SIZE_BYTES,
 			...(hasSupabaseStorage
 				? {
-						// Use process.cwd() (always the project root) rather than __dirname,
-						// which shifts after TypeScript compilation.
-						provider: path.join(process.cwd(), 'src', 'providers', 'upload-supabase'),
+						// Local npm package (file: reference in package.json)
+						// Node resolves it by name, no path issues
+						provider: 'strapi-provider-upload-supabase',
 						providerOptions: {
 							supabaseUrl: env.supabase.url,
 							supabaseServiceRoleKey: env.supabase.serviceRoleKey,

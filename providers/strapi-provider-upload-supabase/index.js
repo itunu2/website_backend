@@ -1,56 +1,41 @@
-import { createClient } from '@supabase/supabase-js';
+'use strict';
 
-interface ProviderOptions {
-  supabaseUrl: string;
-  supabaseServiceRoleKey: string;
-  bucket: string;
-}
+// Supabase Storage upload provider for Strapi v5.
+// Plain CommonJS — no TypeScript compilation needed, no path resolution issues.
 
-interface StrapiFile {
-  hash: string;
-  ext: string;
-  mime: string;
-  buffer?: Buffer;
-  stream?: AsyncIterable<Uint8Array>;
-  url?: string;
-  path?: string;
-  size?: number;
-}
+const { createClient } = require('@supabase/supabase-js');
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-const assertFileSize = (file: StrapiFile): void => {
+function assertFileSize(file) {
   if (file.size && file.size > MAX_FILE_SIZE_BYTES) {
-    throw new Error(
-      `File too large: ${(file.size / 1024 / 1024).toFixed(1)} MB exceeds the 10 MB limit.`,
-    );
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    throw new Error(`File too large: ${mb} MB exceeds the 10 MB limit.`);
   }
-};
+}
 
-// Use `export =` so TypeScript compiles to `module.exports = { init }` (CJS).
-// `export default` compiles to `exports.default = { init }`, which breaks Strapi's
-// provider loader that does `require(path).init(options)`.
-export = {
-  init(config: ProviderOptions) {
+module.exports = {
+  init(config) {
     const { supabaseUrl, supabaseServiceRoleKey, bucket } = config;
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    const getFilePath = (file: StrapiFile): string => {
+    function getFilePath(file) {
       const prefix = file.path ? `${file.path}/` : '';
       return `${prefix}${file.hash}${file.ext}`;
-    };
+    }
 
-    const getPublicUrl = (filePath: string): string =>
-      `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+    function getPublicUrl(filePath) {
+      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+    }
 
     return {
-      async upload(file: StrapiFile): Promise<void> {
+      async upload(file) {
         assertFileSize(file);
         const filePath = getFilePath(file);
 
         const { error } = await supabase.storage
           .from(bucket)
-          .upload(filePath, file.buffer!, {
+          .upload(filePath, file.buffer, {
             contentType: file.mime,
             upsert: true,
           });
@@ -62,21 +47,19 @@ export = {
         file.url = getPublicUrl(filePath);
       },
 
-      async uploadStream(file: StrapiFile): Promise<void> {
+      async uploadStream(file) {
         assertFileSize(file);
-        const chunks: Buffer[] = [];
 
-        for await (const chunk of file.stream!) {
+        const chunks = [];
+        for await (const chunk of file.stream) {
           chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
         }
 
         const buffer = Buffer.concat(chunks);
 
-        // Double-check size after reading stream (in case size was not set)
         if (buffer.length > MAX_FILE_SIZE_BYTES) {
-          throw new Error(
-            `File too large: ${(buffer.length / 1024 / 1024).toFixed(1)} MB exceeds the 10 MB limit.`,
-          );
+          const mb = (buffer.length / 1024 / 1024).toFixed(1);
+          throw new Error(`File too large: ${mb} MB exceeds the 10 MB limit.`);
         }
 
         const filePath = getFilePath(file);
@@ -95,7 +78,7 @@ export = {
         file.url = getPublicUrl(filePath);
       },
 
-      async delete(file: StrapiFile): Promise<void> {
+      async delete(file) {
         const filePath = getFilePath(file);
 
         const { error } = await supabase.storage
