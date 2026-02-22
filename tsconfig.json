@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "module": "CommonJS",
-    "moduleResolution": "Bundler",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "lib": ["ES2020", "DOM"],
     "target": "ES2019",
     "strict": true,
@@ -38,6 +38,9 @@
     "src/admin/",
     // Do not include test files
     "**/*.test.*",
+    "**/*.spec.*",
+    "tests/",
+    "jest.config.ts",
     // Do not include plugins in the server compilation
     "src/plugins/**"
   ]
