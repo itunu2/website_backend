@@ -27,7 +27,10 @@ const assertFileSize = (file: StrapiFile): void => {
   }
 };
 
-export default {
+// Use `export =` so TypeScript compiles to `module.exports = { init }` (CJS).
+// `export default` compiles to `exports.default = { init }`, which breaks Strapi's
+// provider loader that does `require(path).init(options)`.
+export = {
   init(config: ProviderOptions) {
     const { supabaseUrl, supabaseServiceRoleKey, bucket } = config;
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);

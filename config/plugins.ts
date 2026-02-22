@@ -13,7 +13,9 @@ export default () => ({
 			sizeLimit: MAX_FILE_SIZE_BYTES,
 			...(hasSupabaseStorage
 				? {
-						provider: path.join(__dirname, '..', 'src', 'providers', 'upload-supabase'),
+						// Use process.cwd() (always the project root) rather than __dirname,
+						// which shifts after TypeScript compilation.
+						provider: path.join(process.cwd(), 'src', 'providers', 'upload-supabase'),
 						providerOptions: {
 							supabaseUrl: env.supabase.url,
 							supabaseServiceRoleKey: env.supabase.serviceRoleKey,
