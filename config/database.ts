@@ -29,19 +29,21 @@ const buildSslConfig = () =>
       }
     : undefined;
 
+const sqliteConnection = (filename: string) => ({
+  client: 'sqlite' as const,
+  connection: {
+    filename: SQLITE_FILENAME(filename),
+  },
+  useNullAsDefault: true,
+});
+
 const connectionFromUrl = (databaseUrl: string) => {
   const url = new URL(databaseUrl);
   const client = normalizeClient(url.protocol);
 
   if (client === 'sqlite') {
     const filename = url.pathname?.replace(/^\//, '') || env.databaseFilename;
-    return {
-      client,
-      connection: {
-        filename: SQLITE_FILENAME(filename),
-      },
-      useNullAsDefault: true,
-    };
+    return sqliteConnection(filename);
   }
 
   const dbName = url.pathname.replace(/^\//, '') || undefined;
@@ -65,13 +67,7 @@ const connectionFromDiscreteValues = () => {
   const client: SupportedClient = env.databaseClient ?? 'sqlite';
 
   if (client === 'sqlite') {
-    return {
-      client,
-      connection: {
-        filename: SQLITE_FILENAME(env.databaseFilename),
-      },
-      useNullAsDefault: true,
-    };
+    return sqliteConnection(env.databaseFilename);
   }
 
   if (!env.databaseHost || !env.databaseName || !env.databaseUsername) {
@@ -100,7 +96,23 @@ export default () => {
     console.warn('SQLite is intended for smoke tests only. Configure DATABASE_URL for persistence.');
   }
 
-  const config = env.databaseUrl ? connectionFromUrl(env.databaseUrl) : connectionFromDiscreteValues();
+  const config = (() => {
+    if (env.databaseUrl) {
+      return connectionFromUrl(env.databaseUrl);
+    }
+
+    if (env.databaseClient) {
+      return connectionFromDiscreteValues();
+    }
+
+    if (env.nodeEnv !== 'production') {
+      return sqliteConnection(env.databaseFilename);
+    }
+
+    throw new Error(
+      'Production database configuration is missing: set DATABASE_URL or define DATABASE_CLIENT with DATABASE_HOST, DATABASE_NAME, and DATABASE_USERNAME.',
+    );
+  })();
 
   return {
     connection: {
