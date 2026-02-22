@@ -19,9 +19,9 @@
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
-    "@strapi/plugin-cloud": "5.31.2",
-    "@strapi/plugin-users-permissions": "5.31.2",
-    "@strapi/strapi": "5.31.2",
+    "@strapi/plugin-cloud": "^5.36.1",
+    "@strapi/plugin-users-permissions": "^5.36.1",
+    "@strapi/strapi": "^5.36.1",
     "@supabase/supabase-js": "^2.97.0",
     "ioredis": "^5.8.2",
     "pg": "^8.16.3",
@@ -30,7 +30,6 @@
     "react-router-dom": "^6.0.0",
     "slugify": "^1.6.6",
     "styled-components": "^6.0.0",
-    "uuid": "^13.0.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

@@ -1,12 +1,12 @@
 import type { Core } from '@strapi/strapi';
 import type { Context, Next } from 'koa';
-import { v4 as uuid } from 'uuid';
+import { randomUUID } from 'crypto';
 
 declare const strapi: Core.Strapi;
 
 export default () => {
   return async (ctx: Context, next: Next) => {
-    const requestId = ctx.get('x-request-id') || uuid();
+    const requestId = ctx.get('x-request-id') || randomUUID();
     ctx.state.requestId = requestId;
     ctx.set('X-Request-ID', requestId);
 
