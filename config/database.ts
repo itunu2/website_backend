@@ -1,10 +1,15 @@
 import path from 'path';
+import dns from 'node:dns';
 import { env } from '../src/utils/env';
 
 type SupportedClient = 'postgres' | 'mysql' | 'sqlite';
 
 const DEFAULT_POOL = { min: 2, max: 10 };
 const SQLITE_FILENAME = (filename: string) => path.join(process.cwd(), filename);
+
+if (env.databaseForceIpv4) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const normalizeClient = (protocol: string): SupportedClient => {
   switch (protocol.replace(':', '')) {

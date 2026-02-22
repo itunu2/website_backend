@@ -41,6 +41,7 @@ const rawEnvSchema = z.object({
   DATABASE_PASSWORD: z.string().optional(),
   DATABASE_SSL: z.any().optional(),
   DATABASE_SSL_REJECT_UNAUTHORIZED: z.any().optional(),
+  DATABASE_FORCE_IPV4: z.any().optional(),
   DATABASE_FILENAME: z.string().default('.tmp/data.db'),
   CORS_ORIGINS: z.string().optional(),
   SUPABASE_URL: z.string().url().optional(),
@@ -75,6 +76,7 @@ const envSchema = rawEnvSchema.transform((value) => {
     databasePassword: value.DATABASE_PASSWORD,
     databaseSsl: toBoolean(value.DATABASE_SSL),
     databaseSslRejectUnauthorized: toBoolean(value.DATABASE_SSL_REJECT_UNAUTHORIZED ?? true),
+    databaseForceIpv4: toBoolean(value.DATABASE_FORCE_IPV4 ?? true),
     databaseFilename: value.DATABASE_FILENAME,
     corsOrigins: csvToArray(value.CORS_ORIGINS),
     supabase: {
