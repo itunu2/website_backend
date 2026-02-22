@@ -10,23 +10,43 @@ const setupSelfPing = (strapi: Core.Strapi) => {
 
   const baseUrl = env.publicBaseUrl ?? `http://${env.host}:${env.port}`;
   const healthUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
-  const intervalMs = env.selfPingIntervalMinutes * 60 * 1000;
+  const baseIntervalMs = env.selfPingIntervalMinutes * 60 * 1000;
 
-  const tick = async () => {
-    try {
-      await fetch(healthUrl);
-      strapi.log.debug('self_ping.ok', { healthUrl });
-    } catch (error) {
-      strapi.log.warn('self_ping.failed', {
-        healthUrl,
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
+  // Add ±30% jitter so pings look organic, not like a fixed cron
+  const jitter = () => {
+    const variance = baseIntervalMs * 0.3;
+    return baseIntervalMs + (Math.random() * 2 - 1) * variance;
   };
 
-  const timer = setInterval(tick, intervalMs);
-  strapi.server.httpServer?.once('close', () => clearInterval(timer));
-  strapi.log.info('Self-ping scheduler enabled', { healthUrl, intervalMs });
+  let timer: ReturnType<typeof setTimeout>;
+
+  const scheduleTick = () => {
+    const nextMs = Math.round(jitter());
+
+    timer = setTimeout(async () => {
+      try {
+        const start = Date.now();
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(10_000) });
+        const durationMs = Date.now() - start;
+        strapi.log.debug('self_ping.ok', { healthUrl, status: res.status, durationMs });
+      } catch (error) {
+        strapi.log.warn('self_ping.failed', {
+          healthUrl,
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+      // Schedule next ping regardless of success/failure
+      scheduleTick();
+    }, nextMs);
+  };
+
+  scheduleTick();
+  strapi.server.httpServer?.once('close', () => clearTimeout(timer));
+  strapi.log.info('Self-ping scheduler enabled', {
+    healthUrl,
+    baseIntervalMs,
+    jitterRange: '±30%',
+  });
 };
 
 export default {
