@@ -61,6 +61,8 @@ This guide helps you prepare the backend for deployment as a standalone reposito
 - Add environment variables in Render dashboard
 - Database: Use Render PostgreSQL or external (Supabase)
 - Set `sync: false` for all secret variables
+- If you see `ENETUNREACH ... :5432`, remove any manually-set `DATABASE_URL` in Render so the Blueprint-managed DB URL is used
+- Keep `NODE_OPTIONS=--dns-result-order=ipv4first` (set in `render.yaml`) to prefer IPv4 when DB hosts return dual-stack DNS
 
 ### Railway
 - Use the included `railway.toml` configuration

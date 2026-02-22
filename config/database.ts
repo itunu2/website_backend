@@ -34,6 +34,13 @@ const buildSslConfig = () =>
       }
     : undefined;
 
+const buildNetworkConfig = () =>
+  env.databaseForceIpv4
+    ? {
+        family: 4 as const,
+      }
+    : {};
+
 const sqliteConnection = (filename: string) => ({
   client: 'sqlite' as const,
   connection: {
@@ -63,6 +70,7 @@ const connectionFromUrl = (databaseUrl: string) => {
       user: decodeURIComponent(url.username || ''),
       password: decodeURIComponent(url.password || ''),
       ssl: buildSslConfig(),
+      ...buildNetworkConfig(),
     },
     pool: DEFAULT_POOL,
   };
@@ -90,6 +98,7 @@ const connectionFromDiscreteValues = () => {
       user: env.databaseUsername,
       password: env.databasePassword,
       ssl: buildSslConfig(),
+      ...buildNetworkConfig(),
     },
     pool: DEFAULT_POOL,
   };
