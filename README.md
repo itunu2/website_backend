@@ -52,7 +52,7 @@ All secrets live in `.env`. Copy `.env.example`, update the blanks, and keep sec
 | `JWT_SECRET` | Front-office JWT secret (if used) |
 | `DATABASE_URL` | Optional connection string (`postgres://`, `mysql://`, `sqlite://`) |
 | `DATABASE_CLIENT` + granular fields | Fallback discrete DB configuration |
-| `AWS_*` | Enable S3 uploads/CDN delivery when key/secret/region/bucket are set |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_STORAGE_BUCKET` | Enable Supabase Storage uploads when URL and key are set |
 | `DATABASE_FILENAME` | Local SQLite filename (defaults to `.tmp/data.db`, tests override with `.tmp/jest-data.db`) |
 | `REDIS_URL` / `CACHE_TTL_SECONDS` | Toggle Redis/Upstash caching and TTL |
 | `SELF_PING_*`, `PUBLIC_BASE_URL` | Configure background health pings |
@@ -155,7 +155,7 @@ npm run test
 
 ## Phase 2 & 3 Enhancements
 
-- **S3 uploads:** Automatically switches to `@strapi/provider-upload-aws-s3` when AWS creds & bucket are supplied (keeps CDN-ready cache headers).
+- **Supabase Storage uploads:** Automatically switches to Supabase Storage when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied. Free 1 GB storage with your Supabase project.
 - **Redis caching:** Published article + tag lookups now use Redis/Upstash with TTL control and cache busting on create/update/delete.
 - **Request correlation:** Custom middleware injects/returns `X-Request-ID` and emits structured `request.completed` / `request.failed` logs.
 - **Self-ping scheduler:** Optional health pinger keeps free-tier dynos warm via `/api/health`.

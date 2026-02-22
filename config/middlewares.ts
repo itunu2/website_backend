@@ -45,8 +45,8 @@ export default [
         useDefaults: true,
         directives: {
           'default-src': ["'self'"],
-          'img-src': ["'self'", 'data:', 'blob:'],
-          'media-src': ["'self'", 'data:', 'blob:'],
+          'img-src': ["'self'", 'data:', 'blob:', 'https://*.supabase.co'],
+          'media-src': ["'self'", 'data:', 'blob:', 'https://*.supabase.co'],
           'script-src': ["'self'", "'unsafe-inline'"],
           'style-src': ["'self'", "'unsafe-inline'"],
           'frame-ancestors': ["'self'", 'https://render.com', 'https://fly.io'],

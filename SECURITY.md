@@ -32,12 +32,11 @@ Required environment variables:
 - Rotate API tokens regularly (every 90 days recommended)
 - Use read-only tokens for frontend where possible
 
-### AWS/S3 Security
+### Supabase Storage Security
 
-- Use IAM roles/policies with minimal required permissions
-- Enable S3 bucket encryption at rest
-- Use CloudFront CDN with signed URLs for private content
-- Set `AWS_ACL=public-read` only for truly public assets
+- Use the `service_role` key only server-side (never expose to client)
+- Set storage buckets to public only for truly public assets (images)
+- Supabase RLS policies can further restrict access if needed
 
 ### Redis Security
 

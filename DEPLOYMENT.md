@@ -44,12 +44,10 @@ This guide helps you prepare the backend for deployment as a standalone reposito
    CORS_ORIGINS="https://your-frontend.vercel.app"
    PUBLIC_BASE_URL=https://your-backend.onrender.com
 
-   # Optional: AWS S3 for file uploads
-   AWS_ACCESS_KEY_ID=<your-key>
-   AWS_SECRET_ACCESS_KEY=<your-secret>
-   AWS_REGION=us-east-1
-   AWS_BUCKET=<your-bucket>
-   AWS_ACL=public-read
+   # Supabase Storage for file uploads
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+   SUPABASE_STORAGE_BUCKET=strapi-uploads
 
    # Optional: Redis for caching
    REDIS_URL=redis://user:pass@host:6379
@@ -114,8 +112,8 @@ This guide helps you prepare the backend for deployment as a standalone reposito
 - Verify PUBLIC_BASE_URL is correct
 
 **File Upload Issues**
-- Configure AWS S3 or use Render disk volumes
-- Verify AWS credentials and bucket permissions
+- Configure Supabase Storage (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+- Verify Supabase Storage bucket exists and is public
 
 ## Security Best Practices
 
