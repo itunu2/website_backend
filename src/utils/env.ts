@@ -22,6 +22,29 @@ const toBoolean = (value?: string | number | boolean) => {
   return ['true', '1', 'yes'].includes(String(value).toLowerCase());
 };
 
+const sanitizeOptionalString = (value?: string) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim() || undefined;
+  }
+
+  return trimmed;
+};
+
+const isCompactJws = (value: string) =>
+  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value);
+
 const rawEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   HOST: z.string().min(1).default('0.0.0.0'),
@@ -108,7 +131,31 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
     throw new Error('Environment validation failed: APP_KEYS must include at least one key');
   }
 
-  return Object.freeze(result.data);
+  const supabaseUrl = sanitizeOptionalString(result.data.supabase.url);
+  const supabaseServiceRoleKey = sanitizeOptionalString(result.data.supabase.serviceRoleKey);
+  const hasSupabaseUrl = Boolean(supabaseUrl);
+  const hasSupabaseServiceRoleKey = Boolean(supabaseServiceRoleKey);
+
+  if (hasSupabaseUrl !== hasSupabaseServiceRoleKey) {
+    throw new Error(
+      'Environment validation failed: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must both be set together'
+    );
+  }
+
+  if (supabaseServiceRoleKey && !isCompactJws(supabaseServiceRoleKey)) {
+    throw new Error(
+      'Environment validation failed: SUPABASE_SERVICE_ROLE_KEY must be a valid JWT (compact JWS). Do not wrap it in quotes and ensure there are no line breaks.'
+    );
+  }
+
+  return Object.freeze({
+    ...result.data,
+    supabase: {
+      ...result.data.supabase,
+      url: supabaseUrl,
+      serviceRoleKey: supabaseServiceRoleKey,
+    },
+  });
 };
 
 export const env = loadEnv();
