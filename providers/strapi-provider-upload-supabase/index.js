@@ -38,7 +38,13 @@ module.exports = {
       ? Number(config.maxFileSizeBytes)
       : MAX_FILE_SIZE_BYTES;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    });
 
     function getFilePath(file) {
       const prefix = file.path ? `${file.path}/` : '';
@@ -80,8 +86,29 @@ module.exports = {
         return uploadFile(file);
       },
 
+      // Stream directly to Supabase — avoids loading the entire file into memory.
       async uploadStream(file) {
-        return uploadFile(file);
+        if (!file.stream || typeof file.stream[Symbol.asyncIterator] !== 'function') {
+          // Fall back to buffer-based upload if no readable stream.
+          return uploadFile(file);
+        }
+
+        assertFileSize(file, maxFileSizeBytes);
+
+        const filePath = getFilePath(file);
+
+        const { error } = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file.stream, {
+            contentType: file.mime,
+            upsert: true,
+          });
+
+        if (error) {
+          throw new Error(`Supabase Storage upload failed: ${error.message}`);
+        }
+
+        file.url = getPublicUrl(filePath);
       },
 
       async delete(file) {

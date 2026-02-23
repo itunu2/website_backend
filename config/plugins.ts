@@ -10,6 +10,16 @@ export default () => ({
 	upload: {
 		config: {
 			sizeLimit: MAX_FILE_SIZE_BYTES,
+			// Generate responsive image variants automatically via sharp.
+			// Strapi picks the nearest breakpoint; the front-end requests the
+			// right size via Next.js <Image> srcSet.
+			breakpoints: {
+				xlarge: 1920,
+				large: 1000,
+				medium: 750,
+				small: 500,
+				xsmall: 64,
+			},
 			...(hasSupabaseStorage
 				? {
 						// Local npm package (file: reference in package.json)
