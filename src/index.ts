@@ -3,6 +3,9 @@ import { shutdownCache } from './utils/cache';
 import { env } from './utils/env';
 import { syncBlogPostStatuses } from './api/blog-post/utils/status-sync';
 
+const SELF_PING_MIN_INTERVAL_MS = 7 * 60 * 1000;
+const SELF_PING_MAX_INTERVAL_MS = 10 * 60 * 1000;
+
 const setupSelfPing = (strapi: Core.Strapi) => {
   if (!env.selfPingEnabled) {
     return;
@@ -10,42 +13,48 @@ const setupSelfPing = (strapi: Core.Strapi) => {
 
   const baseUrl = env.publicBaseUrl ?? `http://${env.host}:${env.port}`;
   const healthUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
-  const baseIntervalMs = env.selfPingIntervalMinutes * 60 * 1000;
 
-  // Add ±30% jitter so pings look organic, not like a fixed cron
-  const jitter = () => {
-    const variance = baseIntervalMs * 0.3;
-    return baseIntervalMs + (Math.random() * 2 - 1) * variance;
-  };
+  const randomIntervalMs = () =>
+    Math.round(
+      SELF_PING_MIN_INTERVAL_MS +
+        Math.random() * (SELF_PING_MAX_INTERVAL_MS - SELF_PING_MIN_INTERVAL_MS)
+    );
 
-  let timer: ReturnType<typeof setTimeout>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const scheduleTick = () => {
-    const nextMs = Math.round(jitter());
-
-    timer = setTimeout(async () => {
-      try {
-        const start = Date.now();
-        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(10_000) });
-        const durationMs = Date.now() - start;
-        strapi.log.debug('self_ping.ok', { healthUrl, status: res.status, durationMs });
-      } catch (error) {
-        strapi.log.warn('self_ping.failed', {
-          healthUrl,
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-      // Schedule next ping regardless of success/failure
+  const runPing = async () => {
+    try {
+      const start = Date.now();
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(10_000) });
+      const durationMs = Date.now() - start;
+      strapi.log.debug('self_ping.ok', { healthUrl, status: res.status, durationMs });
+    } catch (error) {
+      strapi.log.warn('self_ping.failed', {
+        healthUrl,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    } finally {
       scheduleTick();
-    }, nextMs);
+    }
   };
 
-  scheduleTick();
-  strapi.server.httpServer?.once('close', () => clearTimeout(timer));
+  const scheduleTick = (delayMs = randomIntervalMs()) => {
+    timer = setTimeout(() => {
+      void runPing();
+    }, delayMs);
+  };
+
+  scheduleTick(15_000);
+  strapi.server.httpServer?.once('close', () => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  });
   strapi.log.info('Self-ping scheduler enabled', {
     healthUrl,
-    baseIntervalMs,
-    jitterRange: '±30%',
+    firstPingDelayMs: 15_000,
+    minIntervalMs: SELF_PING_MIN_INTERVAL_MS,
+    maxIntervalMs: SELF_PING_MAX_INTERVAL_MS,
   });
 };
 

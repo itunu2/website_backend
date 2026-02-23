@@ -87,7 +87,6 @@ const rawEnvSchema = z.object({
   REDIS_URL: z.string().url().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SELF_PING_ENABLED: z.any().optional(),
-  SELF_PING_INTERVAL_MINUTES: z.coerce.number().int().min(1).default(10),
   PUBLIC_BASE_URL: z.string().url().optional(),
   UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().max(100).default(25),
 });
@@ -124,7 +123,6 @@ const envSchema = rawEnvSchema.transform((value) => {
     redisUrl: value.REDIS_URL,
     cacheTtlSeconds: value.CACHE_TTL_SECONDS,
     selfPingEnabled: toBoolean(value.SELF_PING_ENABLED),
-    selfPingIntervalMinutes: value.SELF_PING_INTERVAL_MINUTES,
     publicBaseUrl: value.PUBLIC_BASE_URL,
     uploadMaxFileSizeMb: value.UPLOAD_MAX_FILE_SIZE_MB,
   } as const;

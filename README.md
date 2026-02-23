@@ -55,7 +55,7 @@ All secrets live in `.env`. Copy `.env.example`, update the blanks, and keep sec
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_STORAGE_BUCKET` | Enable Supabase Storage uploads when URL and key are set |
 | `DATABASE_FILENAME` | Local SQLite filename (defaults to `.tmp/data.db`, tests override with `.tmp/jest-data.db`) |
 | `REDIS_URL` / `CACHE_TTL_SECONDS` | Toggle Redis/Upstash caching and TTL |
-| `SELF_PING_*`, `PUBLIC_BASE_URL` | Configure background health pings |
+| `SELF_PING_ENABLED`, `PUBLIC_BASE_URL` | Configure background health pings |
 | `CORS_ORIGINS` | Optional comma-separated list of allowed origins |
 
 Boot-time validation (powered by Zod) fails fast when required values are missing, ensuring misconfigurations never reach runtime.
