@@ -1,15 +1,10 @@
 import path from 'path';
-import dns from 'node:dns';
 import { env } from '../src/utils/env';
 
 type SupportedClient = 'postgres' | 'mysql' | 'sqlite';
 
 const DEFAULT_POOL = { min: 2, max: 10 };
 const SQLITE_FILENAME = (filename: string) => path.join(process.cwd(), filename);
-
-if (env.databaseForceIpv4) {
-  dns.setDefaultResultOrder('ipv4first');
-}
 
 const normalizeClient = (protocol: string): SupportedClient => {
   switch (protocol.replace(':', '')) {
@@ -33,13 +28,6 @@ const buildSslConfig = () =>
         rejectUnauthorized: env.databaseSslRejectUnauthorized,
       }
     : undefined;
-
-const buildNetworkConfig = () =>
-  env.databaseForceIpv4
-    ? {
-        family: 4 as const,
-      }
-    : {};
 
 const sqliteConnection = (filename: string) => ({
   client: 'sqlite' as const,
@@ -70,7 +58,6 @@ const connectionFromUrl = (databaseUrl: string) => {
       user: decodeURIComponent(url.username || ''),
       password: decodeURIComponent(url.password || ''),
       ssl: buildSslConfig(),
-      ...buildNetworkConfig(),
     },
     pool: DEFAULT_POOL,
   };
@@ -98,7 +85,6 @@ const connectionFromDiscreteValues = () => {
       user: env.databaseUsername,
       password: env.databasePassword,
       ssl: buildSslConfig(),
-      ...buildNetworkConfig(),
     },
     pool: DEFAULT_POOL,
   };
