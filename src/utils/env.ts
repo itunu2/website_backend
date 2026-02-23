@@ -42,8 +42,23 @@ const sanitizeOptionalString = (value?: string) => {
   return trimmed;
 };
 
+const sanitizeSupabaseServiceRoleKey = (value?: string) => {
+  const sanitized = sanitizeOptionalString(value);
+
+  if (!sanitized) {
+    return undefined;
+  }
+
+  const withoutBearerPrefix = sanitized.replace(/^Bearer\s+/i, '');
+
+  // JWT (compact JWS) is a single-line token with no whitespace.
+  return withoutBearerPrefix.replace(/\s+/g, '');
+};
+
 const isCompactJws = (value: string) =>
   /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value);
+
+const isSupabaseSecretKey = (value: string) => /^sb_secret_[A-Za-z0-9_-]+$/.test(value);
 
 const rawEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -132,7 +147,7 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
   }
 
   const supabaseUrl = sanitizeOptionalString(result.data.supabase.url);
-  const supabaseServiceRoleKey = sanitizeOptionalString(result.data.supabase.serviceRoleKey);
+  const supabaseServiceRoleKey = sanitizeSupabaseServiceRoleKey(result.data.supabase.serviceRoleKey);
   const hasSupabaseUrl = Boolean(supabaseUrl);
   const hasSupabaseServiceRoleKey = Boolean(supabaseServiceRoleKey);
 
@@ -142,9 +157,13 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
     );
   }
 
-  if (supabaseServiceRoleKey && !isCompactJws(supabaseServiceRoleKey)) {
+  if (
+    supabaseServiceRoleKey &&
+    !isCompactJws(supabaseServiceRoleKey) &&
+    !isSupabaseSecretKey(supabaseServiceRoleKey)
+  ) {
     throw new Error(
-      'Environment validation failed: SUPABASE_SERVICE_ROLE_KEY must be a valid JWT (compact JWS). Do not wrap it in quotes and ensure there are no line breaks.'
+      'Environment validation failed: SUPABASE_SERVICE_ROLE_KEY must be a valid legacy JWT service_role key or a new Supabase secret key (sb_secret_...). Do not wrap it in quotes and ensure there are no line breaks.'
     );
   }
 
