@@ -51,6 +51,7 @@ const rawEnvSchema = z.object({
   SELF_PING_ENABLED: z.any().optional(),
   SELF_PING_INTERVAL_MINUTES: z.coerce.number().int().min(1).default(10),
   PUBLIC_BASE_URL: z.string().url().optional(),
+  UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().max(100).default(25),
 });
 
 const envSchema = rawEnvSchema.transform((value) => {
@@ -87,6 +88,7 @@ const envSchema = rawEnvSchema.transform((value) => {
     selfPingEnabled: toBoolean(value.SELF_PING_ENABLED),
     selfPingIntervalMinutes: value.SELF_PING_INTERVAL_MINUTES,
     publicBaseUrl: value.PUBLIC_BASE_URL,
+    uploadMaxFileSizeMb: value.UPLOAD_MAX_FILE_SIZE_MB,
   } as const;
 });
 
