@@ -49,4 +49,4 @@ services:
       - key: SELF_PING_INTERVAL_MINUTES
         value: 10
       - key: PUBLIC_BASE_URL
-        sync: false
+        sync: false  # REQUIRED for self-ping! Set to your Render external URL (e.g. https://strapi-backend-xxxx.onrender.com)

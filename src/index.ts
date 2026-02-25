@@ -3,15 +3,29 @@ import { shutdownCache } from './utils/cache';
 import { env } from './utils/env';
 import { syncBlogPostStatuses } from './api/blog-post/utils/status-sync';
 
-const SELF_PING_MIN_INTERVAL_MS = 7 * 60 * 1000;
-const SELF_PING_MAX_INTERVAL_MS = 10 * 60 * 1000;
+const SELF_PING_MIN_INTERVAL_MS = 5 * 60 * 1000;
+const SELF_PING_MAX_INTERVAL_MS = 8 * 60 * 1000;
 
 const setupSelfPing = (strapi: Core.Strapi) => {
   if (!env.selfPingEnabled) {
     return;
   }
 
+  // PUBLIC_BASE_URL MUST be the external Render URL (e.g. https://strapi-backend-xxxx.onrender.com).
+  // Without it, the ping falls back to http://0.0.0.0:<port> which is a loopback request that
+  // bypasses Render's proxy — Render does NOT count loopback traffic as activity and will still
+  // spin down the instance after 15 minutes of no external requests.
+  if (!env.publicBaseUrl) {
+    strapi.log.error(
+      '⚠ SELF_PING_ENABLED=true but PUBLIC_BASE_URL is NOT set. ' +
+        'Self-ping will use loopback (http://0.0.0.0:' + env.port + ') which Render IGNORES for activity tracking. ' +
+        'Set PUBLIC_BASE_URL to your external Render URL (e.g. https://your-app.onrender.com) ' +
+        'or the instance WILL spin down despite self-pinging.'
+    );
+  }
+
   const baseUrl = env.publicBaseUrl ?? `http://${env.host}:${env.port}`;
+  const isLoopback = !env.publicBaseUrl;
   const healthUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
 
   const randomIntervalMs = () =>
@@ -21,18 +35,21 @@ const setupSelfPing = (strapi: Core.Strapi) => {
     );
 
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let consecutiveFailures = 0;
 
   const runPing = async () => {
     try {
       const start = Date.now();
-      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(10_000) });
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(15_000) });
       const durationMs = Date.now() - start;
-      strapi.log.debug('self_ping.ok', { healthUrl, status: res.status, durationMs });
+      consecutiveFailures = 0;
+      strapi.log.info(`self_ping OK — status=${res.status} duration=${durationMs}ms url=${healthUrl}${isLoopback ? ' ⚠ LOOPBACK (will not prevent Render spin-down)' : ''}`);
     } catch (error) {
-      strapi.log.warn('self_ping.failed', {
-        healthUrl,
-        message: error instanceof Error ? error.message : 'Unknown error',
-      });
+      consecutiveFailures += 1;
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      strapi.log.error(
+        `self_ping FAILED (#${consecutiveFailures}) — url=${healthUrl} error=${message}${isLoopback ? ' ⚠ LOOPBACK MODE' : ''}`
+      );
     } finally {
       scheduleTick();
     }
@@ -50,12 +67,9 @@ const setupSelfPing = (strapi: Core.Strapi) => {
       clearTimeout(timer);
     }
   });
-  strapi.log.info('Self-ping scheduler enabled', {
-    healthUrl,
-    firstPingDelayMs: 15_000,
-    minIntervalMs: SELF_PING_MIN_INTERVAL_MS,
-    maxIntervalMs: SELF_PING_MAX_INTERVAL_MS,
-  });
+  strapi.log.info(
+    `Self-ping scheduler enabled — url=${healthUrl} interval=${SELF_PING_MIN_INTERVAL_MS / 60000}-${SELF_PING_MAX_INTERVAL_MS / 60000}min firstPing=15s${isLoopback ? ' ⚠ WARNING: using loopback — set PUBLIC_BASE_URL!' : ''}`
+  );
 };
 
 export default {
