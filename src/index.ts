@@ -3,24 +3,37 @@ import { shutdownCache } from './utils/cache';
 import { env } from './utils/env';
 import { syncBlogPostStatuses } from './api/blog-post/utils/status-sync';
 
-const SELF_PING_MIN_INTERVAL_MS = 5 * 60 * 1000;
-const SELF_PING_MAX_INTERVAL_MS = 8 * 60 * 1000;
+// Normal ping interval: random between 5–8 minutes.
+// Randomness prevents the requests looking like a bot heartbeat to upstream infrastructure.
+const PING_MIN_MS = 5 * 60 * 1000;
+const PING_MAX_MS = 8 * 60 * 1000;
+const randomPingInterval = () =>
+  Math.round(PING_MIN_MS + Math.random() * (PING_MAX_MS - PING_MIN_MS));
+
+// On failure, retry aggressively: 30s → 1min → 2min.
+// This prevents the 15-minute inactivity window from expiring even during a partial outage.
+const RETRY_DELAYS_MS = [30_000, 60_000, 2 * 60_000];
+
+const PING_TIMEOUT_MS = 10_000;
+
+const getNextDelay = (consecutiveFailures: number): number =>
+  consecutiveFailures === 0
+    ? randomPingInterval()
+    : RETRY_DELAYS_MS[Math.min(consecutiveFailures - 1, RETRY_DELAYS_MS.length - 1)];
 
 const setupSelfPing = (strapi: Core.Strapi) => {
   if (!env.selfPingEnabled) {
     return;
   }
 
-  // PUBLIC_BASE_URL MUST be the external Render URL (e.g. https://strapi-backend-xxxx.onrender.com).
-  // Without it, the ping falls back to http://0.0.0.0:<port> which is a loopback request that
-  // bypasses Render's proxy — Render does NOT count loopback traffic as activity and will still
-  // spin down the instance after 15 minutes of no external requests.
+  // PUBLIC_BASE_URL MUST be the external Render URL (e.g. https://your-app.onrender.com).
+  // Loopback (http://0.0.0.0:PORT) bypasses Render's proxy — Render ignores loopback traffic
+  // for activity tracking and WILL still spin down the instance.
   if (!env.publicBaseUrl) {
     strapi.log.error(
-      '⚠ SELF_PING_ENABLED=true but PUBLIC_BASE_URL is NOT set. ' +
-        'Self-ping will use loopback (http://0.0.0.0:' + env.port + ') which Render IGNORES for activity tracking. ' +
-        'Set PUBLIC_BASE_URL to your external Render URL (e.g. https://your-app.onrender.com) ' +
-        'or the instance WILL spin down despite self-pinging.'
+      '[self_ping] SELF_PING_ENABLED=true but PUBLIC_BASE_URL is not set. ' +
+        'Falling back to loopback which Render IGNORES — the instance will still spin down. ' +
+        'Set PUBLIC_BASE_URL=https://your-app.onrender.com in Render environment variables.'
     );
   }
 
@@ -28,47 +41,72 @@ const setupSelfPing = (strapi: Core.Strapi) => {
   const isLoopback = !env.publicBaseUrl;
   const healthUrl = `${baseUrl.replace(/\/$/, '')}/api/health`;
 
-  const randomIntervalMs = () =>
-    Math.round(
-      SELF_PING_MIN_INTERVAL_MS +
-        Math.random() * (SELF_PING_MAX_INTERVAL_MS - SELF_PING_MIN_INTERVAL_MS)
-    );
-
   let timer: ReturnType<typeof setTimeout> | undefined;
   let consecutiveFailures = 0;
+  let destroyed = false;
+
+  const schedule = (delayMs: number) => {
+    if (destroyed) return;
+    timer = setTimeout(() => { void runPing(); }, delayMs);
+  };
 
   const runPing = async () => {
+    const start = Date.now();
     try {
-      const start = Date.now();
-      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(15_000) });
+      const res = await fetch(healthUrl, { signal: AbortSignal.timeout(PING_TIMEOUT_MS) });
       const durationMs = Date.now() - start;
-      consecutiveFailures = 0;
-      strapi.log.info(`self_ping OK — status=${res.status} duration=${durationMs}ms url=${healthUrl}${isLoopback ? ' ⚠ LOOPBACK (will not prevent Render spin-down)' : ''}`);
-    } catch (error) {
+
+      // Parse body to detect degraded state (e.g. DB down but HTTP 200)
+      let body: { status?: string } = {};
+      try { body = await res.json(); } catch { /* non-JSON response — ignore */ }
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      if (body.status === 'degraded') {
+        // Service is up (Render won't spin down) but something is wrong internally
+        strapi.log.warn(
+          `[self_ping] DEGRADED — service is alive but unhealthy (${durationMs}ms). ` +
+            'Check database connection.'
+        );
+        // Count as a soft failure so we retry sooner than normal
+        consecutiveFailures = Math.max(consecutiveFailures, 1);
+      } else {
+        if (consecutiveFailures > 0) {
+          strapi.log.info(`[self_ping] RECOVERED after ${consecutiveFailures} failure(s) — ${durationMs}ms`);
+        } else {
+          strapi.log.info(`[self_ping] OK — ${durationMs}ms${isLoopback ? ' ⚠ loopback (ineffective on Render)' : ''}`);
+        }
+        consecutiveFailures = 0;
+      }
+    } catch (err) {
       consecutiveFailures += 1;
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = err instanceof Error ? err.message : String(err);
+      const retryIn = getNextDelay(consecutiveFailures);
       strapi.log.error(
-        `self_ping FAILED (#${consecutiveFailures}) — url=${healthUrl} error=${message}${isLoopback ? ' ⚠ LOOPBACK MODE' : ''}`
+        `[self_ping] FAILED #${consecutiveFailures} — ${message} | ` +
+          `retrying in ${retryIn / 1000}s${isLoopback ? ' ⚠ loopback mode' : ''}`
       );
-    } finally {
-      scheduleTick();
+      schedule(retryIn);
+      return; // skip the normal schedule below
     }
+
+    schedule(getNextDelay(consecutiveFailures));
   };
 
-  const scheduleTick = (delayMs = randomIntervalMs()) => {
-    timer = setTimeout(() => {
-      void runPing();
-    }, delayMs);
-  };
+  // First ping after Strapi finishes booting (give it 12s to settle)
+  schedule(12_000);
 
-  scheduleTick(15_000);
   strapi.server.httpServer?.once('close', () => {
-    if (timer) {
-      clearTimeout(timer);
-    }
+    destroyed = true;
+    if (timer) clearTimeout(timer);
   });
+
   strapi.log.info(
-    `Self-ping scheduler enabled — url=${healthUrl} interval=${SELF_PING_MIN_INTERVAL_MS / 60000}-${SELF_PING_MAX_INTERVAL_MS / 60000}min firstPing=15s${isLoopback ? ' ⚠ WARNING: using loopback — set PUBLIC_BASE_URL!' : ''}`
+    `[self_ping] Enabled — url=${healthUrl} interval=${PING_MIN_MS / 60_000}–${PING_MAX_MS / 60_000}min (randomised) ` +
+      `retrySequence=${RETRY_DELAYS_MS.map(d => d / 1000 + 's').join('→')} firstPing=12s` +
+      (isLoopback ? ' ⚠ WARNING: using loopback — set PUBLIC_BASE_URL!' : '')
   );
 };
 
