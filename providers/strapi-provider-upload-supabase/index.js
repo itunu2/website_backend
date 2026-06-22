@@ -1,9 +1,8 @@
 'use strict';
 
 // Supabase Storage upload provider for Strapi v5.
-// Plain CommonJS — no TypeScript compilation needed, no path resolution issues.
-
-const { createClient } = require('@supabase/supabase-js');
+// Uses direct REST API calls instead of the SDK to avoid JWT parsing issues
+// with both legacy JWT service role keys and new sb_secret_... format keys.
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -38,13 +37,8 @@ module.exports = {
       ? Number(config.maxFileSizeBytes)
       : MAX_FILE_SIZE_BYTES;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    });
+    const storageBase = `${supabaseUrl}/storage/v1`;
+    const authHeader = `Bearer ${supabaseServiceRoleKey}`;
 
     function getFilePath(file) {
       const prefix = file.path ? `${file.path}/` : '';
@@ -52,7 +46,30 @@ module.exports = {
     }
 
     function getPublicUrl(filePath) {
-      return `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+      return `${storageBase}/object/public/${bucket}/${filePath}`;
+    }
+
+    async function uploadBuffer(filePath, buffer, contentType) {
+      const res = await fetch(`${storageBase}/object/${bucket}/${filePath}`, {
+        method: 'POST',
+        headers: {
+          Authorization: authHeader,
+          'Content-Type': contentType || 'application/octet-stream',
+          'x-upsert': 'true',
+        },
+        body: buffer,
+      });
+
+      if (!res.ok) {
+        let message = res.statusText;
+        try {
+          const body = await res.json();
+          message = body.message || body.error || message;
+        } catch (_) {
+          // non-JSON body — use status text
+        }
+        throw new Error(`Supabase Storage upload failed (${res.status}): ${message}`);
+      }
     }
 
     async function uploadFile(file) {
@@ -66,18 +83,7 @@ module.exports = {
       }
 
       const filePath = getFilePath(file);
-
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, buffer, {
-          contentType: file.mime,
-          upsert: true,
-        });
-
-      if (error) {
-        throw new Error(`Supabase Storage upload failed: ${error.message}`);
-      }
-
+      await uploadBuffer(filePath, buffer, file.mime);
       file.url = getPublicUrl(filePath);
     }
 
@@ -86,40 +92,52 @@ module.exports = {
         return uploadFile(file);
       },
 
-      // Stream directly to Supabase — avoids loading the entire file into memory.
       async uploadStream(file) {
         if (!file.stream || typeof file.stream[Symbol.asyncIterator] !== 'function') {
-          // Fall back to buffer-based upload if no readable stream.
           return uploadFile(file);
         }
 
         assertFileSize(file, maxFileSizeBytes);
 
-        const filePath = getFilePath(file);
+        // Collect stream into buffer — Supabase REST requires Content-Length
+        const chunks = [];
+        for await (const chunk of file.stream) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const buffer = Buffer.concat(chunks);
 
-        const { error } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, file.stream, {
-            contentType: file.mime,
-            upsert: true,
-          });
-
-        if (error) {
-          throw new Error(`Supabase Storage upload failed: ${error.message}`);
+        if (buffer.length > maxFileSizeBytes) {
+          const mb = (buffer.length / 1024 / 1024).toFixed(1);
+          const limitMb = (maxFileSizeBytes / 1024 / 1024).toFixed(0);
+          throw new Error(`File too large: ${mb} MB exceeds the ${limitMb} MB limit.`);
         }
 
+        const filePath = getFilePath(file);
+        await uploadBuffer(filePath, buffer, file.mime);
         file.url = getPublicUrl(filePath);
       },
 
       async delete(file) {
         const filePath = getFilePath(file);
 
-        const { error } = await supabase.storage
-          .from(bucket)
-          .remove([filePath]);
+        const res = await fetch(`${storageBase}/object/${bucket}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prefixes: [filePath] }),
+        });
 
-        if (error) {
-          throw new Error(`Supabase Storage delete failed: ${error.message}`);
+        if (!res.ok) {
+          let message = res.statusText;
+          try {
+            const body = await res.json();
+            message = body.message || body.error || message;
+          } catch (_) {
+            // non-JSON body — use status text
+          }
+          throw new Error(`Supabase Storage delete failed (${res.status}): ${message}`);
         }
       },
     };

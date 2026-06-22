@@ -165,6 +165,15 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
     );
   }
 
+  if (supabaseServiceRoleKey) {
+    const fmt = isCompactJws(supabaseServiceRoleKey)
+      ? 'JWT (Compact JWS)'
+      : isSupabaseSecretKey(supabaseServiceRoleKey)
+        ? 'sb_secret_...'
+        : 'unknown';
+    console.log(`[env] SUPABASE_SERVICE_ROLE_KEY detected — format: ${fmt}, length: ${supabaseServiceRoleKey.length}`);
+  }
+
   return Object.freeze({
     ...result.data,
     supabase: {
