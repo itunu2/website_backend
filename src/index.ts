@@ -3,10 +3,11 @@ import { shutdownCache } from './utils/cache';
 import { env } from './utils/env';
 import { syncBlogPostStatuses } from './api/blog-post/utils/status-sync';
 
-// Normal ping interval: random between 5–8 minutes.
+// Normal ping interval: random between 3–5 minutes.
 // Randomness prevents the requests looking like a bot heartbeat to upstream infrastructure.
-const PING_MIN_MS = 5 * 60 * 1000;
-const PING_MAX_MS = 8 * 60 * 1000;
+// Render free tier spins down after 15 min of inactivity — 3–5 min gives a comfortable buffer.
+const PING_MIN_MS = 3 * 60 * 1000;
+const PING_MAX_MS = 5 * 60 * 1000;
 const randomPingInterval = () =>
   Math.round(PING_MIN_MS + Math.random() * (PING_MAX_MS - PING_MIN_MS));
 
@@ -104,7 +105,7 @@ const setupSelfPing = (strapi: Core.Strapi) => {
   });
 
   strapi.log.info(
-    `[self_ping] Enabled — url=${healthUrl} interval=${PING_MIN_MS / 60_000}–${PING_MAX_MS / 60_000}min (randomised) ` +
+    `[self_ping] Enabled — url=${healthUrl} interval=${PING_MIN_MS / 60_000}–${PING_MAX_MS / 60_000}min (randomised, ~${Math.round((PING_MIN_MS + PING_MAX_MS) / 2 / 60_000)}min avg) ` +
       `retrySequence=${RETRY_DELAYS_MS.map(d => d / 1000 + 's').join('→')} firstPing=12s` +
       (isLoopback ? ' ⚠ WARNING: using loopback — set PUBLIC_BASE_URL!' : '')
   );
