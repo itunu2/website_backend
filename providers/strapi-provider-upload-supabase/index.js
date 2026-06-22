@@ -39,14 +39,19 @@ module.exports = {
 
     const storageBase = `${supabaseUrl}/storage/v1`;
 
-    // New opaque keys (sb_secret_... / sb_publishable_...) must be sent on
-    // the "apikey" header — NOT as a Bearer token. Supabase tries to parse
-    // Bearer values as JWTs and rejects opaque keys with "Invalid Compact JWS".
-    // Legacy JWT keys (eyJ...) continue to use Authorization: Bearer.
+    // For new opaque keys (sb_secret_... / sb_publishable_...) the Supabase
+    // API gateway requires BOTH the "apikey" header (so it knows which key to
+    // look up) AND "Authorization: Bearer <key>" (which it then replaces with
+    // an internal pre-signed JWT before forwarding to the storage service).
+    // Sending only one of them results in a 400 from the storage service.
+    // Legacy JWT keys (eyJ...) only need Authorization: Bearer.
     const isOpaqueKey = /^sb_(secret|publishable)_/.test(supabaseServiceRoleKey);
     function authHeaders() {
       if (isOpaqueKey) {
-        return { apikey: supabaseServiceRoleKey };
+        return {
+          apikey: supabaseServiceRoleKey,
+          Authorization: `Bearer ${supabaseServiceRoleKey}`,
+        };
       }
       return { Authorization: `Bearer ${supabaseServiceRoleKey}` };
     }
