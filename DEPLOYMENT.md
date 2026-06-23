@@ -44,6 +44,9 @@ This guide helps you prepare the backend for deployment as a standalone reposito
    CORS_ORIGINS="https://your-frontend.vercel.app"
    PUBLIC_BASE_URL=https://your-backend.onrender.com
 
+   # Keep-alive (prevents Render free tier from spinning down)
+   SELF_PING_ENABLED=true
+
    # Supabase Storage for file uploads
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>

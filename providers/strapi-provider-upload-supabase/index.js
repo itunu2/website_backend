@@ -1,8 +1,20 @@
 'use strict';
 
 // Supabase Storage upload provider for Strapi v5.
-// Uses direct REST API calls instead of the SDK to avoid JWT parsing issues
-// with both legacy JWT service role keys and new sb_secret_... format keys.
+//
+// Uses Supabase's S3-compatible protocol (AWS SigV4) with dedicated S3 access
+// keys — NOT the anon/service_role/sb_secret API keys. This is the officially
+// recommended credential for full server-side storage access and is completely
+// independent of the legacy-JWT -> new-API-key migration: S3 access keys do not
+// expire with the end-of-2026 legacy key deprecation, and authentication never
+// touches the API gateway's JWT minting (which is what failed with the opaque
+// sb_secret_ key in "direct" gateway mode).
+
+const {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} = require('@aws-sdk/client-s3');
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -32,29 +44,28 @@ async function toBuffer(file) {
 
 module.exports = {
   init(config) {
-    const { supabaseUrl, supabaseServiceRoleKey, bucket } = config;
+    const {
+      s3Endpoint,
+      s3Region,
+      s3AccessKeyId,
+      s3SecretAccessKey,
+      publicUrlBase,
+      bucket,
+    } = config;
+
     const maxFileSizeBytes = Number.isFinite(config.maxFileSizeBytes)
       ? Number(config.maxFileSizeBytes)
       : MAX_FILE_SIZE_BYTES;
 
-    const storageBase = `${supabaseUrl}/storage/v1`;
-
-    // For new opaque keys (sb_secret_... / sb_publishable_...) the Supabase
-    // API gateway requires BOTH the "apikey" header (so it knows which key to
-    // look up) AND "Authorization: Bearer <key>" (which it then replaces with
-    // an internal pre-signed JWT before forwarding to the storage service).
-    // Sending only one of them results in a 400 from the storage service.
-    // Legacy JWT keys (eyJ...) only need Authorization: Bearer.
-    const isOpaqueKey = /^sb_(secret|publishable)_/.test(supabaseServiceRoleKey);
-    function authHeaders() {
-      if (isOpaqueKey) {
-        return {
-          apikey: supabaseServiceRoleKey,
-          Authorization: `Bearer ${supabaseServiceRoleKey}`,
-        };
-      }
-      return { Authorization: `Bearer ${supabaseServiceRoleKey}` };
-    }
+    const client = new S3Client({
+      forcePathStyle: true,
+      region: s3Region,
+      endpoint: s3Endpoint,
+      credentials: {
+        accessKeyId: s3AccessKeyId,
+        secretAccessKey: s3SecretAccessKey,
+      },
+    });
 
     function getFilePath(file) {
       const prefix = file.path ? `${file.path}/` : '';
@@ -62,29 +73,23 @@ module.exports = {
     }
 
     function getPublicUrl(filePath) {
-      return `${storageBase}/object/public/${bucket}/${filePath}`;
+      // publicUrlBase is the project URL, e.g. https://<ref>.supabase.co
+      return `${publicUrlBase}/storage/v1/object/public/${bucket}/${filePath}`;
     }
 
-    async function uploadBuffer(filePath, buffer, contentType) {
-      const res = await fetch(`${storageBase}/object/${bucket}/${filePath}`, {
-        method: 'POST',
-        headers: {
-          ...authHeaders(),
-          'Content-Type': contentType || 'application/octet-stream',
-          'x-upsert': 'true',
-        },
-        body: buffer,
-      });
-
-      if (!res.ok) {
-        let message = res.statusText;
-        try {
-          const body = await res.json();
-          message = body.message || body.error || message;
-        } catch (_) {
-          // non-JSON body — use status text
-        }
-        throw new Error(`Supabase Storage upload failed (${res.status}): ${message}`);
+    async function putObject(filePath, buffer, contentType) {
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: filePath,
+            Body: buffer,
+            ContentType: contentType || 'application/octet-stream',
+          })
+        );
+      } catch (error) {
+        const detail = error && error.message ? error.message : String(error);
+        throw new Error(`Supabase Storage upload failed: ${detail}`);
       }
     }
 
@@ -99,7 +104,7 @@ module.exports = {
       }
 
       const filePath = getFilePath(file);
-      await uploadBuffer(filePath, buffer, file.mime);
+      await putObject(filePath, buffer, file.mime);
       file.url = getPublicUrl(filePath);
     }
 
@@ -108,52 +113,23 @@ module.exports = {
         return uploadFile(file);
       },
 
+      // S3 PutObject requires a known Content-Length, so we buffer the stream.
       async uploadStream(file) {
-        if (!file.stream || typeof file.stream[Symbol.asyncIterator] !== 'function') {
-          return uploadFile(file);
-        }
-
-        assertFileSize(file, maxFileSizeBytes);
-
-        // Collect stream into buffer — Supabase REST requires Content-Length
-        const chunks = [];
-        for await (const chunk of file.stream) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        }
-        const buffer = Buffer.concat(chunks);
-
-        if (buffer.length > maxFileSizeBytes) {
-          const mb = (buffer.length / 1024 / 1024).toFixed(1);
-          const limitMb = (maxFileSizeBytes / 1024 / 1024).toFixed(0);
-          throw new Error(`File too large: ${mb} MB exceeds the ${limitMb} MB limit.`);
-        }
-
-        const filePath = getFilePath(file);
-        await uploadBuffer(filePath, buffer, file.mime);
-        file.url = getPublicUrl(filePath);
+        return uploadFile(file);
       },
 
       async delete(file) {
         const filePath = getFilePath(file);
-
-        const res = await fetch(`${storageBase}/object/${bucket}`, {
-          method: 'DELETE',
-          headers: {
-            ...authHeaders(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prefixes: [filePath] }),
-        });
-
-        if (!res.ok) {
-          let message = res.statusText;
-          try {
-            const body = await res.json();
-            message = body.message || body.error || message;
-          } catch (_) {
-            // non-JSON body — use status text
-          }
-          throw new Error(`Supabase Storage delete failed (${res.status}): ${message}`);
+        try {
+          await client.send(
+            new DeleteObjectCommand({
+              Bucket: bucket,
+              Key: filePath,
+            })
+          );
+        } catch (error) {
+          const detail = error && error.message ? error.message : String(error);
+          throw new Error(`Supabase Storage delete failed: ${detail}`);
         }
       },
     };

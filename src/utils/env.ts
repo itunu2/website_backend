@@ -55,11 +55,6 @@ const sanitizeSupabaseServiceRoleKey = (value?: string) => {
   return withoutBearerPrefix.replace(/\s+/g, '');
 };
 
-const isCompactJws = (value: string) =>
-  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value);
-
-const isSupabaseSecretKey = (value: string) => /^sb_secret_[A-Za-z0-9_-]+$/.test(value);
-
 const rawEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   HOST: z.string().min(1).default('0.0.0.0'),
@@ -82,8 +77,16 @@ const rawEnvSchema = z.object({
   DATABASE_FILENAME: z.string().default('.tmp/data.db'),
   CORS_ORIGINS: z.string().optional(),
   SUPABASE_URL: z.string().url().optional(),
+  // Legacy/REST auth key — no longer used for storage uploads (kept optional
+  // for backward compatibility / any other Supabase usage).
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('strapi-uploads'),
+  // S3-compatible storage credentials (the permanent, recommended way to do
+  // server-side uploads — independent of the anon/service_role/sb_secret keys).
+  SUPABASE_S3_ENDPOINT: z.string().url().optional(),
+  SUPABASE_S3_REGION: z.string().optional(),
+  SUPABASE_S3_ACCESS_KEY_ID: z.string().optional(),
+  SUPABASE_S3_SECRET_ACCESS_KEY: z.string().optional(),
   REDIS_URL: z.string().url().optional(),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   SELF_PING_ENABLED: z.any().optional(),
@@ -119,6 +122,10 @@ const envSchema = rawEnvSchema.transform((value) => {
       url: value.SUPABASE_URL,
       serviceRoleKey: value.SUPABASE_SERVICE_ROLE_KEY,
       storageBucket: value.SUPABASE_STORAGE_BUCKET,
+      s3Endpoint: value.SUPABASE_S3_ENDPOINT,
+      s3Region: value.SUPABASE_S3_REGION,
+      s3AccessKeyId: value.SUPABASE_S3_ACCESS_KEY_ID,
+      s3SecretAccessKey: value.SUPABASE_S3_SECRET_ACCESS_KEY,
     },
     redisUrl: value.REDIS_URL,
     cacheTtlSeconds: value.CACHE_TTL_SECONDS,
@@ -146,32 +153,44 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
 
   const supabaseUrl = sanitizeOptionalString(result.data.supabase.url);
   const supabaseServiceRoleKey = sanitizeSupabaseServiceRoleKey(result.data.supabase.serviceRoleKey);
-  const hasSupabaseUrl = Boolean(supabaseUrl);
-  const hasSupabaseServiceRoleKey = Boolean(supabaseServiceRoleKey);
 
-  if (hasSupabaseUrl !== hasSupabaseServiceRoleKey) {
+  const s3Endpoint = sanitizeOptionalString(result.data.supabase.s3Endpoint);
+  const s3Region = sanitizeOptionalString(result.data.supabase.s3Region);
+  const s3AccessKeyId = sanitizeOptionalString(result.data.supabase.s3AccessKeyId);
+  const s3SecretAccessKey = sanitizeOptionalString(result.data.supabase.s3SecretAccessKey);
+
+  // Storage uploads use the S3-compatible protocol. All four S3 settings plus
+  // SUPABASE_URL (used to build public file URLs) must be present together.
+  const s3Parts = {
+    SUPABASE_S3_ENDPOINT: s3Endpoint,
+    SUPABASE_S3_REGION: s3Region,
+    SUPABASE_S3_ACCESS_KEY_ID: s3AccessKeyId,
+    SUPABASE_S3_SECRET_ACCESS_KEY: s3SecretAccessKey,
+  };
+  const presentS3 = Object.entries(s3Parts).filter(([, v]) => Boolean(v));
+  const anyS3 = presentS3.length > 0;
+  const allS3 = presentS3.length === Object.keys(s3Parts).length;
+
+  if (anyS3 && !allS3) {
+    const missing = Object.entries(s3Parts)
+      .filter(([, v]) => !v)
+      .map(([k]) => k)
+      .join(', ');
     throw new Error(
-      'Environment validation failed: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must both be set together'
+      `Environment validation failed: Supabase S3 storage is partially configured — missing: ${missing}`
     );
   }
 
-  if (
-    supabaseServiceRoleKey &&
-    !isCompactJws(supabaseServiceRoleKey) &&
-    !isSupabaseSecretKey(supabaseServiceRoleKey)
-  ) {
+  if (allS3 && !supabaseUrl) {
     throw new Error(
-      'Environment validation failed: SUPABASE_SERVICE_ROLE_KEY must be a valid legacy JWT service_role key or a new Supabase secret key (sb_secret_...). Do not wrap it in quotes and ensure there are no line breaks.'
+      'Environment validation failed: SUPABASE_URL is required alongside the SUPABASE_S3_* settings (used to build public file URLs)'
     );
   }
 
-  if (supabaseServiceRoleKey) {
-    const fmt = isCompactJws(supabaseServiceRoleKey)
-      ? 'JWT (Compact JWS)'
-      : isSupabaseSecretKey(supabaseServiceRoleKey)
-        ? 'sb_secret_...'
-        : 'unknown';
-    console.log(`[env] SUPABASE_SERVICE_ROLE_KEY detected — format: ${fmt}, length: ${supabaseServiceRoleKey.length}`);
+  if (allS3) {
+    console.log('[env] Supabase S3 storage configured — provider: s3, endpoint set, region set');
+  } else {
+    console.log('[env] Supabase S3 storage NOT configured — falling back to local upload provider');
   }
 
   return Object.freeze({
@@ -180,6 +199,10 @@ export const loadEnv = (environment: NodeJS.ProcessEnv = process.env): EnvConfig
       ...result.data.supabase,
       url: supabaseUrl,
       serviceRoleKey: supabaseServiceRoleKey,
+      s3Endpoint,
+      s3Region,
+      s3AccessKeyId,
+      s3SecretAccessKey,
     },
   });
 };
